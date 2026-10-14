@@ -14,7 +14,7 @@ Layered malware scanner for removable drives. Read-only by default, cross-platfo
 ## Install
 
 ```bash
-git clone https://github.com/s4ntrx/usb-scanner.git
+git clone https://github.com/<you>/usb-scanner.git
 cd usb-scanner
 pip install -e ".[yara]"
 ```
@@ -31,6 +31,30 @@ VT_API_KEY=... usbscan /mnt/usb --virustotal
 Exit codes: `0` nothing serious, `1` high or critical finding, `2` usage error.
 
 VirusTotal mode sends only SHA-256 hashes, never file contents. The free tier allows four lookups per minute, and the client throttles itself to match.
+
+## Windows desktop app
+
+```powershell
+pip install -e ".[gui,yara]"
+usbscan-gui
+```
+
+The app watches for inserted drives, scans read-only, lists findings by severity, and lets you quarantine selected files. Quarantined files move to `%LOCALAPPDATA%\usbscan\quarantine`, and `manifest.jsonl` there records each original path so you can restore false positives. Settings cover insert notifications and the optional VirusTotal lookup.
+
+External USB hard drives often register as fixed disks on Windows and will not be auto-detected. Use **Choose folder** for those.
+
+### Build the installer-less release
+
+```powershell
+./packaging/build.ps1
+```
+
+This runs the tests, builds a PyInstaller one-folder app, and writes `dist/usbscan-windows.zip` plus its SHA-256. Pushing a `v*` tag runs the same build in GitHub Actions and attaches the zip to a release.
+
+Expect friction on distribution:
+
+- Unsigned executables trigger Microsoft SmartScreen and are sometimes flagged by antivirus products. Publish the SHA-256 and sign releases with a code-signing certificate if you distribute widely.
+- The one-folder build is large (about 180 MB) because it bundles Qt.
 
 ## Extend coverage
 

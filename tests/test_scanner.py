@@ -88,3 +88,20 @@ def test_yara_rule_matches_eicar(tmp_path):
     (tmp_path / "test.com").write_text(EICAR)
     summary = run_scan(tmp_path, yara_engine=YaraEngine(DATA_DIRECTORY))
     assert "EICAR_Test_File" in rules_for(summary, "test.com")
+
+
+def test_cancel_stops_scan_before_first_file(tmp_path):
+    (tmp_path / "a.txt").write_text("a")
+    config = ScanConfig(roots=[tmp_path], hash_database={})
+    summary = scan(config, should_cancel=lambda: True)
+    assert summary.cancelled
+    assert summary.files_scanned == 0
+
+
+def test_quarantine_writes_manifest(tmp_path):
+    drive, vault = tmp_path / "drive", tmp_path / "vault"
+    drive.mkdir()
+    (drive / "autorun.inf").write_text("[autorun]\nopen=x.exe\n")
+    run_scan(drive, quarantine_directory=vault)
+    manifest_line = (vault / "manifest.jsonl").read_text().strip()
+    assert str(drive / "autorun.inf") in manifest_line

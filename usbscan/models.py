@@ -32,5 +32,6 @@ class ScanSummary:
     files_scanned: int = 0
     files_skipped: int = 0
     duration_seconds: float = 0.0
+    cancelled: bool = False
     flagged: list[FileResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

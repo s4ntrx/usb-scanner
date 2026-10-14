@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import psutil
 
-REMOVABLE_MOUNT_PREFIXES = ("/media/", "/run/media/", "/Volumes/", "/mnt/")
+REMOVABLE_MOUNT_PREFIXES = ("/media/", "/run/media/", "/Volumes/")
 
 
 def list_removable_mount_points() -> list[str]:

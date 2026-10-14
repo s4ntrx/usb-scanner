@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 from usbscan.hashing import sha256_of_file
 from usbscan.heuristics import EXECUTABLE_EXTENSIONS, analyze_file
@@ -25,11 +26,21 @@ class ScanConfig:
     quarantine_min_severity: str = "high"
 
 
-def _quarantine(result: FileResult, directory: Path) -> str:
+def quarantine_file(path: Path, sha256: str, directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / f"{result.sha256[:12]}_{Path(result.path).name}.quarantined"
-    shutil.move(result.path, destination)
-    return str(destination)
+    destination = directory / f"{sha256[:12]}_{path.name}.quarantined"
+    shutil.move(str(path), destination)
+    entry = {"original": str(path), "quarantined": str(destination), "sha256": sha256}
+    with (directory / "manifest.jsonl").open("a", encoding="utf-8") as manifest:
+        manifest.write(json.dumps(entry) + "\n")
+    return destination
+
+
+def _walk_files(roots: list[Path]) -> Iterator[tuple[Path, Path]]:
+    for root in roots:
+        for directory, _, filenames in os.walk(root, followlinks=False):
+            for filename in filenames:
+                yield root, Path(directory) / filename
 
 
 def _scan_file(path: Path, root: Path, config: ScanConfig) -> FileResult:
@@ -46,33 +57,37 @@ def _scan_file(path: Path, root: Path, config: ScanConfig) -> FileResult:
     return FileResult(str(path), sha256, size, findings)
 
 
-def scan(config: ScanConfig, on_file: Callable[[Path], None] | None = None) -> ScanSummary:
+def scan(
+    config: ScanConfig,
+    on_file: Callable[[Path], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> ScanSummary:
     started = time.monotonic()
     summary = ScanSummary(roots=[str(root) for root in config.roots])
     quarantine_threshold = SEVERITY_RANK[config.quarantine_min_severity]
 
-    for root in config.roots:
-        for directory, _, filenames in os.walk(root, followlinks=False):
-            for filename in filenames:
-                path = Path(directory) / filename
-                if path.is_symlink():
-                    summary.files_skipped += 1
-                    continue
-                try:
-                    if path.stat().st_size > config.max_file_size:
-                        summary.files_skipped += 1
-                        continue
-                    if on_file:
-                        on_file(path)
-                    result = _scan_file(path, root, config)
-                    summary.files_scanned += 1
-                    if not result.findings:
-                        continue
-                    if config.quarantine_directory and SEVERITY_RANK[result.top_severity] >= quarantine_threshold:
-                        result.quarantined_to = _quarantine(result, config.quarantine_directory)
-                    summary.flagged.append(result)
-                except (OSError, RuntimeError) as error:
-                    summary.errors.append(f"{path}: {error}")
+    for root, path in _walk_files(config.roots):
+        if should_cancel and should_cancel():
+            summary.cancelled = True
+            break
+        if path.is_symlink():
+            summary.files_skipped += 1
+            continue
+        try:
+            if path.stat().st_size > config.max_file_size:
+                summary.files_skipped += 1
+                continue
+            if on_file:
+                on_file(path)
+            result = _scan_file(path, root, config)
+            summary.files_scanned += 1
+            if not result.findings:
+                continue
+            if config.quarantine_directory and SEVERITY_RANK[result.top_severity] >= quarantine_threshold:
+                result.quarantined_to = str(quarantine_file(path, result.sha256, config.quarantine_directory))
+            summary.flagged.append(result)
+        except (OSError, RuntimeError) as error:
+            summary.errors.append(f"{path}: {error}")
 
     summary.duration_seconds = round(time.monotonic() - started, 2)
     return summary

@@ -13,10 +13,14 @@ dependencies = ["psutil>=5.9"]
 
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
+gui = ["PySide6>=6.6"]
 dev = ["pytest>=7"]
 
 [project.scripts]
 usbscan = "usbscan.cli:main"
+
+[project.gui-scripts]
+usbscan-gui = "usbscan.gui.app:main"
 
 [tool.setuptools.packages.find]
 include = ["usbscan*"]
