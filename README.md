@@ -14,7 +14,7 @@ Layered malware scanner for removable drives. Read-only by default, cross-platfo
 ## Install
 
 ```bash
-git clone https://github.com/<you>/usb-scanner.git
+git clone https://github.com/s4ntrx/usb-scanner.git
 cd usb-scanner
 pip install -e ".[yara]"
 ```
